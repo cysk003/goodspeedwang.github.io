@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pocket Money Account · Statement</title>
+<style>
+  :root{
+    --navy:#0b2545;
+    --navy-2:#13315c;
+    --ink:#1f2937;
+    --muted:#6b7280;
+    --line:#e5e9f0;
+    --bg:#eef1f6;
+    --card:#ffffff;
+    --credit:#0f7a52;   /* 存入/收入 */
+    --debit:#c0392b;    /* 支出 */
+    --gold:#b8893b;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--bg);
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+    padding:18px 14px 40px;
+  }
+  .app{max-width:840px;margin:0 auto;}
+
+  /* ---------- 银行抬头 ---------- */
+  .bank-header{
+    background:linear-gradient(135deg,var(--navy),var(--navy-2));
+    color:#fff;border-radius:14px;padding:22px 24px;
+    box-shadow:0 10px 26px rgba(11,37,69,.25);
+  }
+  .bank-header .brand{display:flex;align-items:center;gap:10px;font-size:15px;letter-spacing:.5px;}
+  .bank-header .brand .dot{width:9px;height:9px;border-radius:50%;background:var(--gold);box-shadow:0 0 0 3px rgba(184,137,59,.25);}
+  .bank-header .brand small{margin-left:auto;opacity:.6;font-size:11px;letter-spacing:2px;}
+  .bank-header .account{margin-top:14px;opacity:.78;font-size:13px;}
+  .bank-header .balance{margin-top:4px;font-size:38px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:.5px;}
+  .bank-header .balance-label{font-size:12px;opacity:.7;margin-bottom:2px;}
+
+  /* ---------- 概览卡 ---------- */
+  .overview{display:flex;gap:14px;flex-wrap:wrap;margin:14px 0 18px;}
+  .tile{
+    flex:1 1 220px;background:var(--card);border:1px solid var(--line);
+    border-radius:12px;padding:14px 16px;
+    display:flex;align-items:baseline;gap:8px;
+  }
+  .tile .k{font-size:12px;color:var(--muted);white-space:nowrap;}
+  .tile .v{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;}
+  .tile.spend .v{color:var(--debit);}
+  .tile.balance .v{color:var(--navy);}
+
+  /* ---------- 月份块（对账单）---------- */
+  .month{
+    background:var(--card);border:1px solid var(--line);border-radius:12px;
+    margin-bottom:14px;overflow:hidden;
+  }
+  .month-head{
+    display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;
+    padding:12px 16px;background:#f7f9fc;border-bottom:1px solid var(--line);
+  }
+  .month-head h2{margin:0;font-size:15px;font-weight:700;color:var(--navy);}
+  .month-sum{display:flex;gap:18px;font-size:12.5px;flex-wrap:wrap;font-variant-numeric:tabular-nums;}
+  .month-sum .lab{color:var(--muted);margin-right:4px;}
+  .month-sum .cr{color:var(--credit);}
+  .month-sum .db{color:var(--debit);}
+  .month-sum .en{color:var(--ink);}
+  .month-sum .closing{color:var(--navy);font-weight:700;font-size:14.5px;padding:2px 9px;background:#eaf0f8;border-radius:7px;}
+
+  /* ---------- 流水行 ---------- */
+  .rows{list-style:none;margin:0;padding:0;}
+  .row{
+    display:grid;grid-template-columns:auto 1fr auto;
+    align-items:center;gap:10px;padding:11px 16px;
+    border-bottom:1px solid var(--line);
+  }
+  .row:last-child{border-bottom:none;}
+  .row .meta{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;}
+  .row .date{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;}
+  .row .note{font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .row .right{text-align:right;white-space:nowrap;}
+  .row .amt{font-size:14.5px;font-weight:600;font-variant-numeric:tabular-nums;}
+  .row .bal{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;margin-top:2px;}
+  .cr{color:var(--credit);}
+  .db{color:var(--debit);}
+
+  .tag{
+    font-size:11px;padding:3px 9px;border-radius:6px;white-space:nowrap;
+    background:#f0f2f6;color:#5b6472;border:1px solid #e3e7ee;
+  }
+  .t-initial {background:#eef1f6;color:#5b6472;border-color:#e3e7ee;}
+  .t-allowance{background:#eaf1fb;color:#1f5fae;border-color:#d6e4f7;}
+  .t-holiday {background:#e7f5f1;color:#0f7a52;border-color:#cfe9e2;}
+  .t-interest{background:#f0ecfa;color:#6a4bc4;border-color:#ddd3f3;font-size:10px;padding:2px 6px;}
+  .t-income  {background:#eaf6ef;color:#0f7a52;border-color:#cdeede;}
+  .t-expense {background:#fdeceb;color:#c0392b;border-color:#f5d3d0;}
+
+  footer{text-align:center;font-size:12px;color:var(--muted);margin-top:22px;line-height:1.8;}
+  footer code{background:#fff;border:1px solid var(--line);border-radius:5px;padding:1px 6px;}
+
+  @media (max-width:520px){
+    .bank-header .balance{font-size:30px;}
+    .row{grid-template-columns:auto 1fr auto;gap:8px;padding:10px 12px;}
+    .month-head{padding:10px 12px;}
+    .row{padding-left:12px;padding-right:12px;}
+  }
+</style>
+</head>
+<body>
+  <div class="app">
+    <section class="overview">
+      <div class="tile balance">
+        <div class="k">Balance</div>
+        <div class="v" id="balance2">¥0.00</div>
+      </div>
+      <div class="tile spend">
+        <div class="k">Current Month Spending</div>
+        <div class="v" id="monthSpent">¥0.00</div>
+      </div>
+    </section>
+
+    <main id="ledger"></main>
+  </div>
+
+  <script src="piggybank.js"></script>
+  <script>
+  (function () {
+    var DATA = window.PIGGYBANK_DATA;
+    if (!DATA) {
+      document.getElementById('ledger').innerHTML =
+        '<p style="text-align:center;color:#c0392b">Data file piggybank.js not found. Make sure it is in the same folder as this page.</p>';
+      return;
+    }
+
+    var cfg = Object.assign({
+      startDate: '2025-01-01',
+      initialBalance: 0,
+      schedule: []
+    }, DATA.config || {});
+
+    var txns = DATA.transactions || [];
+
+    function parseDate(s) {
+      var p = String(s).split('-').map(Number);
+      return new Date(p[0], (p[1] || 1) - 1, p[2] || 1);
+    }
+    function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
+    function pad(n) { return n < 10 ? '0' + n : '' + n; }
+    function fmt(n) { return Number(n).toFixed(2); }
+    function fmtHtml(n) { return Number(n).toFixed(2); }
+    function escapeHtml(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+
+    var ORDER = { initial: 0, allowance: 1, holiday: 2, interest: 3, income: 4, expense: 5 };
+    var TYPE_META = {
+      initial:  { tag: 'Opening', cls: 't-initial' },
+      allowance:{ tag: 'Deposit', cls: 't-allowance' },
+      holiday:  { tag: 'Holiday', cls: 't-holiday' },
+      interest: { tag: 'Interest', cls: 't-interest' },
+      income:   { tag: 'Credit', cls: 't-income' },
+      expense:  { tag: 'Debit', cls: 't-expense' }
+    };
+    var MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+    var start = parseDate(cfg.startDate);
+    var today = new Date(); today.setHours(0, 0, 0, 0);
+    var lastMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+
+    // 取某个日期生效的完整配置：先取默认（基线），再按 schedule 里 date <= 该日期的
+    // 条目逐条覆盖。两个日期之间用前面（更早）那条的配置。
+    function getEffective(date) {
+      var eff = { monthlyAllowance: 0, annualInterestRate: 0, holidayAllowance: 0 };
+      var list = (cfg.schedule || []).slice().sort(function (x, y) { return parseDate(x.date) - parseDate(y.date); });
+      for (var i = 0; i < list.length; i++) {
+        var e = list[i];
+        if (parseDate(e.date) <= date) {
+          if (typeof e.monthlyAllowance === 'number') eff.monthlyAllowance = e.monthlyAllowance;
+          if (typeof e.annualInterestRate === 'number') eff.annualInterestRate = e.annualInterestRate;
+          if (typeof e.holidayAllowance === 'number') eff.holidayAllowance = e.holidayAllowance;
+        } else break;
+      }
+      return eff;
+    }
+
+    var entries = [];
+    entries.push({ date: start, type: 'initial', amount: cfg.initialBalance, note: 'Opening balance', dynamic: false });
+
+    // 自动：从开户所在月的 1 号起，到本月 1 号为止
+    var cur = new Date(start.getFullYear(), start.getMonth(), 1);
+    while (cur <= lastMonth) {
+      var first = new Date(cur.getFullYear(), cur.getMonth(), 1);
+      if (first >= start) {
+        var m = cur.getMonth() + 1;
+        var eff = getEffective(first);
+        entries.push({ date: first, type: 'allowance', amount: eff.monthlyAllowance, note: 'Monthly allowance', dynamic: false });
+        if (eff.holidayAllowance) entries.push({ date: first, type: 'holiday', amount: eff.holidayAllowance, note: MONTHS[m - 1] + ' holiday allowance', dynamic: false });
+        entries.push({ date: first, type: 'interest', amount: null, rate: eff.annualInterestRate, note: 'Interest (' + (eff.annualInterestRate * 100) + '% APR)', dynamic: true });
+      }
+      cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+    }
+
+    // 手动流水（type 省略时默认为支出）
+    txns.forEach(function (t) {
+      entries.push({
+        date: parseDate(t.date),
+        type: t.type === 'income' ? 'income' : 'expense',
+        amount: Number(t.amount),
+        note: t.note || '',
+        dynamic: false
+      });
+    });
+
+    // 按时间正序排序（用于正确计算运行余额）
+    entries.sort(function (a, b) {
+      var d = a.date - b.date;
+      if (d !== 0) return d;
+      return (ORDER[a.type] == null ? 9 : ORDER[a.type]) - (ORDER[b.type] == null ? 9 : ORDER[b.type]);
+    });
+
+    var balance = 0;
+    entries.forEach(function (e) {
+      if (e.type === 'expense') {
+        balance -= e.amount;
+      } else if (e.dynamic && e.type === 'interest') {
+        e.amount = round2(balance * (e.rate || 0) / 12);
+        balance += e.amount;
+      } else {
+        balance += e.amount;
+      }
+      e.balance = round2(balance);
+    });
+
+    // 本月支出
+    var curY = today.getFullYear(), curM = today.getMonth();
+    var monthSpent = 0;
+    entries.forEach(function (e) {
+      if (e.type === 'expense' && e.date.getFullYear() === curY && e.date.getMonth() === curM) {
+        monthSpent += e.amount;
+      }
+    });
+
+    // ---------- 渲染 ----------
+    function signAmount(e) {
+      if (e.type === 'expense') return '<span class="db">-' + fmtHtml(e.amount) + '</span>';
+      return '<span class="cr">+' + fmtHtml(e.amount) + '</span>';
+    }
+    function monthLabel(k) {
+      var p = k.split('-');
+      return MONTHS[Number(p[1]) - 1] + ' ' + p[0];
+    }
+
+    var lastBal = entries.length ? entries[entries.length - 1].balance : 0;
+    document.getElementById('balance2').innerHTML = fmtHtml(lastBal);
+    document.getElementById('monthSpent').innerHTML = fmtHtml(round2(monthSpent));
+
+    // 分组（月份补零，保证字符串排序正确）
+    var groups = {};
+    entries.forEach(function (e) {
+      var k = e.date.getFullYear() + '-' + pad(e.date.getMonth() + 1);
+      (groups[k] = groups[k] || []).push(e);
+    });
+    var keys = Object.keys(groups).sort(); // 正序
+
+    var html = '';
+    // 从近到远展示
+    for (var i = keys.length - 1; i >= 0; i--) {
+      var k = keys[i];
+      var list = groups[k];
+      var inc = 0, exp = 0;
+      list.forEach(function (e) { if (e.type === 'expense') exp += e.amount; else inc += e.amount; });
+      var endBal = list[list.length - 1].balance;
+
+      html += '<section class="month">';
+      html += '<div class="month-head"><h2>' + monthLabel(k) + '</h2>';
+      html += '<div class="month-sum">'
+        + '<span><span class="lab">Credits</span><span class="cr">' + fmtHtml(round2(inc)) + '</span></span>'
+        + '<span><span class="lab">Debits</span><span class="db">' + fmtHtml(round2(exp)) + '</span></span>'
+        + '<span><span class="lab">Closing Balance</span><span class="closing">' + fmtHtml(endBal) + '</span></span>'
+        + '</div></div>';
+      html += '<ul class="rows">';
+
+      // 月内也从近到远
+      for (var j = list.length - 1; j >= 0; j--) {
+        var e = list[j];
+        var meta = TYPE_META[e.type] || { tag: e.type, cls: '' };
+        html += '<li class="row">'
+          + '<span class="meta"><span class="date">' + pad(e.date.getMonth() + 1) + '-' + pad(e.date.getDate()) + '</span>'
+          + '<span class="tag ' + meta.cls + '">' + meta.tag + '</span></span>'
+          + '<span class="note">' + escapeHtml(e.note) + '</span>'
+          + '<span class="right">'
+          + '<div class="amt">' + signAmount(e) + '</div>'
+          + '<div class="bal">Balance ' + fmtHtml(e.balance) + '</div>'
+          + '</span>'
+          + '</li>';
+      }
+      html += '</ul></section>';
+    }
+
+    document.getElementById('ledger').innerHTML = html;
+  })();
+  </script>
+</body>
+</html>
